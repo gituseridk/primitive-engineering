@@ -1,47 +1,51 @@
-use super::GameWorldObjectTrait;
+use super::{GameWorldObjectTrait, ObjectSpawn};
 use crate::plugins::{loading::resources::GameAssets, objects::components::GameWorldObject};
 use bevy::prelude::*;
-use bevy_rapier3d::prelude::*;
 use bevy_reflect::{FromReflect, Reflect};
+use std::sync::{Arc, Mutex};
 
-#[derive(Debug, Clone, Default, Component, Reflect, FromReflect)]
-#[reflect(Component)]
+#[derive(Debug, Clone, Default, Reflect, FromReflect)]
 pub struct TreeObject;
 
-#[derive(Bundle)]
-pub struct TreeObjectBundle {
-    pub name: Name,
-    pub o: GameWorldObject,
-    pub s: TreeObject,
-    pub collider: Collider,
-    #[bundle]
-    pub scene_bundle: SceneBundle,
-}
-
-impl TreeObjectBundle {
-    pub fn new(assets: &GameAssets, transform: Transform) -> Self {
-        Self {
-            o: GameWorldObject,
-            s: TreeObject,
-            name: Name::new(format!("object:{}", TreeObject::id())),
-            collider: assets.tree_object.collider.clone().unwrap(),
-            scene_bundle: SceneBundle {
-                scene: assets.tree_object.scene.clone(),
-                transform,
-                ..Default::default()
-            },
-        }
-    }
+impl TreeObject {
+    const ID: &'static str = "tree";
 }
 
 impl GameWorldObjectTrait for TreeObject {
-    fn id() -> &'static str {
-        "tree"
+    fn id(&self) -> &'static str {
+        Self::ID
     }
 
-    fn spawn(commands: &mut Commands, assets: &GameAssets, transform: Transform) -> Entity {
+    fn spawn(
+        &mut self,
+        commands: &mut Commands,
+        assets: &GameAssets,
+        transform: Transform,
+    ) -> Entity {
         commands
-            .spawn(TreeObjectBundle::new(assets, transform))
+            .spawn((
+                GameWorldObject(Arc::new(Mutex::new(std::mem::take(self)))),
+                Name::new(format!("object:{}", TreeObject::ID)),
+                assets.tree_object.collider.clone().unwrap(),
+                SceneBundle {
+                    scene: assets.tree_object.scene.clone(),
+                    transform,
+                    ..Default::default()
+                },
+            ))
             .id()
+    }
+
+    fn get_spawn(self, pos: Vec3) -> ObjectSpawn {
+        ObjectSpawn {
+            chunk_child: true,
+            id: Self::ID,
+            object: Some(Arc::new(Mutex::new(self))),
+            pos,
+        }
+    }
+
+    fn to_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
